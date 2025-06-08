@@ -1,0 +1,43 @@
+services:
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      args:
+        BUILDKIT_INLINE_CACHE: 1
+    image: steam-scraper:latest
+    volumes:
+      - ./scripts:/app/scripts
+      - playwright-browsers:/app/pw-browsers
+    ports:
+      - "8000:8000"
+    environment:
+      - PYTHONUNBUFFERED=1
+    command: python scripts/main.py
+    restart: unless-stopped
+    
+  playwright:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      args:
+        BUILDKIT_INLINE_CACHE: 1
+    image: steam-scraper:latest
+    volumes:
+      - ./scripts:/app/scripts
+      - playwright-browsers:/app/pw-browsers
+    environment:
+      - PYTHONUNBUFFERED=1
+    command: python scripts/main.py
+    shm_size: 1gb # 共有メモリサイズを増やしてブラウザのパフォーマンスを向上
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "python", "-c", "import os; exit(0 if os.path.exists('/tmp/.healthy') else 1)"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 5s
+
+volumes:
+  playwright-browsers:
+    name: playwright-browsers

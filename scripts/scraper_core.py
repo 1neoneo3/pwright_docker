@@ -116,7 +116,9 @@ def extract_data_from_brightdata_html(html_content, appid):
 
 class SteamDBScraper:
     def __init__(self, brightdata_api_token=None):
-        self.brightdata_api_token = brightdata_api_token or "cdacbd9dfd3ad3064cfa45a8fcaabeb6c0b38c93dc9b29d6e981b81f2732bb60"
+        if not brightdata_api_token:
+            raise ValueError("BrightData API token is required")
+        self.brightdata_api_token = brightdata_api_token
         self.user_agents = USER_AGENTS
         self.successful_extractions = 0
         self.collected_data = []

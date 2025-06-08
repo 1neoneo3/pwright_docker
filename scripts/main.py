@@ -14,12 +14,29 @@ logging.basicConfig(
 
 from datetime import datetime, timezone
 from google.cloud import bigquery
+from google.cloud import secretmanager
 from scraper_core import SteamDBScraper
 
 # BigQuery設定
 PROJECT_ID = "capable-blend-244100"
 DATASET_ID = "steam_data"
 TABLE_ID = "steam_app_metrics"
+
+def get_secret(secret_name):
+    """Secret Managerからシークレットを取得"""
+    try:
+        client = secretmanager.SecretManagerServiceClient()
+        secret_version_name = f"projects/{PROJECT_ID}/secrets/{secret_name}/versions/latest"
+        
+        response = client.access_secret_version(request={"name": secret_version_name})
+        secret_value = response.payload.data.decode("UTF-8")
+        
+        logging.info(f"Secret '{secret_name}' を正常に取得しました")
+        return secret_value
+        
+    except Exception as e:
+        logging.error(f"Secret '{secret_name}' の取得に失敗しました: {e}")
+        return None
 
 def load_sql_file(filename):
     """SQLファイルを読み込み"""
@@ -213,7 +230,13 @@ async def main():
     selected_appids = [100, 130]
     logging.info(f"処理対象のAppID (SQLファイルベース一括MERGE処理テスト): {selected_appids}")
 
-    scraper = SteamDBScraper()
+    # Secret ManagerからBrightData API tokenを取得
+    brightdata_token = get_secret("brightdata-api-token")
+    if not brightdata_token:
+        logging.error("BrightData API tokenの取得に失敗しました。処理を中止します。")
+        return
+    
+    scraper = SteamDBScraper(brightdata_api_token=brightdata_token)
     successful_extractions, collected_data = await scraper.scrape_multiple_apps(selected_appids)
 
     if collected_data:
