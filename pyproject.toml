@@ -1,0 +1,25 @@
+[project]
+name = "steam-playwright-scraper"
+version = "0.1.0"
+description = "Scraping Steam with Playwright"
+requires-python = ">=3.11"
+dependencies = [
+    "playwright>=1.40.0",
+    "requests",
+    "beautifulsoup4",
+    "aiohttp>=3.8.4",
+    "google-cloud-logging>=3.5.0",
+    "google-cloud-storage>=2.10.0",
+    "google-cloud-bigquery>=3.11.0",
+    "playwright-stealth>=1.0.5",
+    "pandas>=1.4.0",
+    "matplotlib>=3.5.0",
+    "debugpy>=1.6.0",
+]
+
+[tool.setuptools]
+py-modules = ["steamdb_playwright_scraper"]
+
+[build-system]
+requires = ["setuptools>=61.0.0", "wheel"]
+build-backend = "setuptools.build_meta"

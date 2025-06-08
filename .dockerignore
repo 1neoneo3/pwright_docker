@@ -1,0 +1,62 @@
+# バージョン管理システム
+.git
+.gitignore
+
+# Python関連
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+*.egg-info/
+steam_playwright_scraper.egg-info/
+.installed.cfg
+*.egg
+
+# 仮想環境
+venv/
+env/
+ENV/
+.env
+
+# テスト/カバレッジレポート
+htmlcov/
+.tox/
+.coverage
+.coverage.*
+.cache
+nosetests.xml
+coverage.xml
+*.cover
+
+# ドキュメント
+docs/
+.hypothesis/
+
+# ドキュメント
+docs/
+README.md
+CHANGELOG.md
+LICENSE
+
+# ログファイル
+logs/
+*.log
+
+# ローカル開発環境設定
+.vscode/
+.idea/
+*.swp
+*.swo
+.DS_Store
+
+# その他不要ファイル
+.dockerignore
+.editorconfig
+EOF < /dev/null
