@@ -1,112 +1,65 @@
-# ---- Base Stage: Python base image ----
-FROM python:3.12-slim-bookworm AS base
+# Base image with Python 3.11
+FROM python:3.11-slim-bookworm
+COPY --from=ghcr.io/astral-sh/uv:latest /uv /uvx /bin/
 
-# Set environment variables to reduce Python output and improve performance
-ENV PYTHONDONTWRITEBYTECODE=1 \
-    PYTHONUNBUFFERED=1 \
-    PIP_NO_CACHE_DIR=1 \
-    PYTHONFAULTHANDLER=1 \
-    PYTHONHASHSEED=random \
-    PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD=1
-
+# Set working directory
 WORKDIR /app
 
-# ---- Dependencies Stage: Install Python dependencies ----
-FROM base AS dependencies
+# Configure APT for reliability with better mirrors
+RUN echo 'Acquire::Check-Valid-Until "false";' > /etc/apt/apt.conf.d/10no-check-valid-until \
+    && echo 'Acquire::Check-Date "false";' > /etc/apt/apt.conf.d/10no-check-date \
+    && echo 'Acquire::Retries "5";' > /etc/apt/apt.conf.d/80retries \
+    && echo 'Acquire::http::Pipeline-Depth "0";' > /etc/apt/apt.conf.d/90fix-hashsum \
+    && echo 'Acquire::http::No-Cache "true";' >> /etc/apt/apt.conf.d/90fix-hashsum \
+    && echo 'Acquire::BrokenProxy "true";' >> /etc/apt/apt.conf.d/90fix-hashsum
 
-# Copy uv from official image
-COPY --from=ghcr.io/astral-sh/uv:latest /uv /bin/
-
-# Install minimal build dependencies with retry
-RUN set -e; \
-    for i in $(seq 1 3); do \
-      apt-get update --fix-missing && \
-      apt-get install -y --no-install-recommends \
-        build-essential \
-        curl \
-        ca-certificates && \
-      apt-get clean && \
-      rm -rf /var/lib/apt/lists/* /tmp/* /var/tmp/* && \
-      break || \
-      if [ $i -lt 3 ]; then \
-        echo "Attempt $i failed! Retrying in 5 seconds..."; \
-        sleep 5; \
-      fi; \
-    done
-
-# Copy only requirements files first to leverage Docker cache
-COPY requirements.txt .
-COPY pyproject.toml .
-
-# Install Python dependencies with uv
-RUN uv pip install --no-cache-dir -r requirements.txt --system
-
-# ---- Playwright Stage: Prepare browser dependencies ----
-FROM base AS playwright
-
-# Install minimal Playwright dependencies with retry
-RUN set -e; \
-    for i in $(seq 1 3); do \
-      apt-get update --fix-missing && \
-      apt-get install -y --no-install-recommends \
+# Install only essential packages
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends \
+        wget \
+        gnupg \
         ca-certificates \
-        fonts-liberation \
-        libasound2 \
-        libatk-bridge2.0-0 \
-        libatk1.0-0 \
-        libcups2 \
-        libdbus-1-3 \
-        libdrm2 \
-        libgbm1 \
-        libglib2.0-0 \
-        libnspr4 \
-        libnss3 \
-        libxcomposite1 \
-        libxdamage1 \
-        libxfixes3 \
-        libxrandr2 \
-        xvfb \
-        libexpat1 \
-        libatspi2.0-0 \
-        libx11-6 \
-        libxext6 && \
-      apt-get clean && \
-      rm -rf /var/lib/apt/lists/* /tmp/* /var/tmp/* && \
-      break || \
-      if [ $i -lt 3 ]; then \
-        echo "Attempt $i failed! Retrying in 5 seconds..."; \
-        sleep 5; \
-      fi; \
+    && apt-get clean \
+    && rm -rf /var/lib/apt/lists/*
+
+# Copy dependency files first for better caching
+COPY pyproject.toml ./
+
+# Install Python dependencies
+RUN uv pip install --system -e .
+
+# Install Playwright
+RUN uv pip install --system playwright
+
+# Install Playwright browser dependencies manually with retries
+RUN for i in 1 2 3; do \
+        apt-get update && \
+        DEBIAN_FRONTEND=noninteractive apt-get install -y --fix-missing --no-install-recommends \
+            libglib2.0-0 libnss3 libnspr4 libdbus-1-3 libatk1.0-0 libatk-bridge2.0-0 \
+            libcups2 libxcomposite1 libxdamage1 libxrandr2 libgbm1 libxkbcommon0 \
+            libpango-1.0-0 libcairo2 libasound2 libatspi2.0-0 libxshmfence1 \
+            libx11-6 libxcb1 libxext6 libxfixes3 libexpat1 fonts-liberation \
+            libvulkan1 xvfb && \
+        apt-get clean && \
+        rm -rf /var/lib/apt/lists/* && \
+        break; \
     done
 
-# Copy Python packages from dependencies stage
-COPY --from=dependencies /usr/local/lib/python3.12/site-packages /usr/local/lib/python3.12/site-packages
-COPY --from=dependencies /usr/local/bin /usr/local/bin
+# Install Chromium browser  
+RUN PLAYWRIGHT_BROWSERS_PATH=/app/pw-browsers python -m playwright install chromium
 
-# Download and install only Chromium without system dependencies
-RUN mkdir -p /opt/pw-browsers && \
-    PLAYWRIGHT_BROWSERS_PATH=/opt/pw-browsers playwright install chromium
+# Create non-root user
+RUN useradd -m -u 1000 appuser
 
-# ---- Final Stage: Runtime image ----
-FROM playwright AS final
-
-# Set browser path environment variable
-ENV PLAYWRIGHT_BROWSERS_PATH=/opt/pw-browsers
-
-# Create necessary directories
-RUN mkdir -p /app/scripts
-
-# Copy application code
-COPY ./scripts /app/scripts
-
-# Set up a non-root user
-RUN groupadd -g 1000 appuser && \
-    useradd -u 1000 -g appuser -s /bin/bash -m appuser && \
-    chown -R appuser:appuser /app
+# Copy application code and change ownership
+COPY --chown=appuser:appuser scripts/ ./scripts/
 
 # Switch to non-root user
 USER appuser
 
-# Entrypoint and command
-ENTRYPOINT ["python"]
-CMD ["scripts/main.py"]
+# Environment variables
+ENV PYTHONUNBUFFERED=1 \
+    PLAYWRIGHT_BROWSERS_PATH=/app/pw-browsers
+
+# Default command
+CMD ["python", "scripts/main.py"]
